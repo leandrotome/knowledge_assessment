@@ -1,0 +1,92 @@
+////////////////////////////////////////////////////////////////////////////////
+/// \ File		    main.c
+/// \ Author:	    Leandro Martins
+/// \ Date:		    20/08/2022
+/// \ Description:	Implement function to calculate maximum, minimum and average
+///                 value of an array and return array with even values
+////////////////////////////////////////////////////////////////////////////////
+#include <stdio.h>
+#include <stdlib.h>
+
+//Calculate array size
+#define ARRAY_SIZE(a)  sizeof(a)/sizeof(a[0])
+
+//Function to get array info
+int* getArrayInfo(int a[], int *len, int *max, int *min, float *avg){
+    int i, eNum = 0, j = 0;
+    int *ptr=0;
+    int sum_avg = 0;
+    
+    // initialize max and min variables
+    *max = a[0];
+    *min = a[0];
+    
+    // loop over the array
+    for(i=0; i<*len; i++)
+    {
+        // increment number of even elements
+        if (a[i] % 2 == 0) eNum++;
+        
+        // find max value
+        if(a[i] > *max) *max = a[i];
+        
+        // find min value
+        if(a[i] < *min) *min = a[i];
+        
+        // sum to avg
+        sum_avg+=a[i];
+    }
+    
+    // calculate average
+    *avg = (float) sum_avg / (*len);
+    
+    // pass even numbers to the pointer
+    if(eNum>0)
+    {
+        ptr = (int*)malloc(eNum*sizeof(int));
+        for(i=0;i<*len;i++)
+        {
+            if (a[i] % 2 == 0) ptr[j++]=a[i];
+        }
+        
+        // get new array size
+        *len = eNum;
+    }
+    return ptr;
+}
+
+
+int main() {
+    
+    int *newArray;
+    int max_o=0, min_o=0;
+    float avg_o=0;
+    
+    // array input
+    int array[]={-7,7,3,9,15,2};
+    int N;
+    
+    // get array size
+    N = ARRAY_SIZE(array);
+    
+    // get array info (max, min, avg) and return array of even values
+    newArray = getArrayInfo(array ,&N, &max_o, &min_o, &avg_o);
+    
+    if(newArray)
+    {   
+        printf("Even Array = [");
+        for(int i=0; i<N; i++) printf("%d ", newArray[i]);
+        printf("] \n");
+        printf("New array size = %d\n",N);
+        
+        free(newArray);
+    }
+    else
+        printf("Array without even values\n");
+    
+    printf("Max value = %d\n", max_o);
+    printf("Min value = %d\n", min_o);
+    printf("Avg value = %.2f\n", avg_o);
+
+    return 0;
+}

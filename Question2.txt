@@ -1,0 +1,66 @@
+// Button state machine Question 4
+
+#define BUTTON_PIN 4
+
+typedef enum
+{
+	B_OFF= 0,
+	B_ON,
+	B_PROTECTED,
+} B_STATE_E;
+
+bool readButton = HIGH;                 // read dig in button state
+unsigned long startPressedTime = 0;     // the moment the button was pressed
+unsigned long endPressedTime = 0;       // the moment the button was released
+unsigned long protectTime = 0;          // current time while protected
+unsigned long holdTime = 0;             // how long the button was hold
+B_STATE_E b_state = B_OFF;              // initial state
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+}
+
+void loop() {
+
+  // read digital input
+  readButton = digitalRead((BUTTON_PIN));
+
+  switch(b_state)
+  {
+    case B_OFF:
+      // if button pressed
+      if(readButton == LOW){       
+        Serial.println("ON");
+        b_state = B_ON;
+        startPressedTime = millis();
+      }
+    break;
+
+    case B_ON:
+       // if button released
+      if(readButton == HIGH){     
+        // print button hold time
+        endPressedTime = millis();
+        holdTime = endPressedTime - startPressedTime;
+        Serial.print("Hold time(ms):");
+        Serial.println(holdTime);
+        
+        Serial.println("PROTECTED");
+        b_state = B_PROTECTED;
+      }
+    break;
+
+    case B_PROTECTED:
+      protectTime = millis();
+      // wait 10s in protected state
+      if((protectTime - endPressedTime)>=10000){
+        Serial.println("OFF");
+        b_state = B_OFF;
+      }
+    break;
+
+    default:
+    break;
+  }
+}
