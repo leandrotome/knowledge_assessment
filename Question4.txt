@@ -1,0 +1,249 @@
+
+/////////////////////////////////////////////////////////////////////////
+// VARIABLE AND STRUCT DEFINITIONS
+/////////////////////////////////////////////////////////////////////////
+typedef enum {IDLE, RECEIVING, CHECK, PARSE, REPLY, ERROR} UART_STATES_T;
+
+typedef struct {
+	unsigned short ID				:1;				
+	unsigned short ERROR			:1;				
+	unsigned short CRC				:1;				
+	unsigned short receiving		:1;			
+	unsigned short receiving_done	:1;	
+} UART_FLAG;
+
+typedef struct
+{
+	uint8_t channel;
+	uint8_t id;
+	UART_STATES_T state;
+	UART_FLAG flags;
+
+	// RX buffers
+	uint8_t RX_Buf[128];
+	uint8_t RX_BufCount;
+	uint8_t RX_FrameSize;
+}UART_T;
+
+UART_T uart_GENERIC;
+
+/////////////////////////////////////////////////////////////////////////
+// UART DRIVER INITIALIZATION
+/////////////////////////////////////////////////////////////////////////
+void uartInit(void)
+{
+	uart_GENERIC.channel = CHANNEL_GENERIC;
+	uart_GENERIC.id 	 = GENERIC_ID;
+	uart_GENERIC.state 	 = IDLE;
+	UART_GENERIC_DRV_INIT_M(BIT_RATE, STOP_BIT, PARITY_MODE, PARITY_ENABLE,
+							&rx_interrupt_handler, INTERRUPT_PRIORITY);
+}
+	
+
+/////////////////////////////////////////////////////////////////////////
+// MAIN COMMUNICATION THREAD
+/////////////////////////////////////////////////////////////////////////	
+void commThread(void)
+{
+	// Initialize uart and assign interrupt
+	uartInit();
+
+    for (;;)
+    {
+    	uartStateMachine(&uart_GENERIC);
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+// UART STATE MACHINE
+/////////////////////////////////////////////////////////////////////////
+void uartStateMachine(UART_T *uart_t)
+{
+////////////////////////////////////////////////////////////////////////////////
+//							UART STATE MACHINE							  //
+//																			  //
+// 	+------+       +-----------+     receiving_done = 1   +-------+		      //
+//->| IDLE | ----->| RECEIVING | ------------------------>| CHECK | 		  //
+// 	+------+ 	   +-----------+ 	                      +-------+		   	  //
+// 		^	  													 |			  //
+// 		|					Flag.CRC = 0 and Flag.ID = 1		 |			  //
+// 		|<-------------------------------------------------------|		  	  //
+//		|													 	 |		  	  //
+// 		|                       								 |       	  //
+// 		|                       Flag.PROC = 0	   +--------+    | Flag.CRC=0 //
+// 		------------------------------------------ | PARSE  |<---- Flag.ID=0  //
+// 					            		           +--------+				  //
+//																			  //
+////////////////////////////////////////////////////////////////////////////////
+	float payload[4];
+	
+	switch(uart_t->state)
+	{
+		case IDLE:
+
+			// Clear flags
+			uart_t->flags = 0;
+
+			// Clear counters
+			uart_t->RX_BufCount = 0;
+			uart_t->RX_FrameSize = 0xff;
+			
+			//enable Rx interrupt
+			enable_rx_int(uart_t->channel);
+
+			// Jump to next state
+			uart_t->state = RECEIVING;
+			
+			break;
+
+		case RECEIVING:
+
+			if(uart_t->flags.ERROR == 1)
+			{
+				uart_t->state = ERROR;
+			}
+			// If receive a completely frame
+			else if(uart_t->flags.receiving_done == 1)
+			{
+				// Clear receiving flags
+				uart_t->flags.receiving_done = 0;
+				uart_t->flags.receiving = 0;
+
+				// Jump to check
+				uart_t->state = CHECK;
+
+			}
+			else if(uart_t->flags.receiving == 1)
+			{
+				// implement timeout function
+			}
+
+			break;
+
+		case CHECK:
+
+			// Check CRC
+			uartVerifyCRC(uart_t);
+
+			// Verify flags
+			if(uart_t->flags.CRC == 0 && uart_t->flags.ID == 0)
+			{
+				uart_t->state = PARSE;
+			}
+			else if(uart_t->flags.CRC == 0 && uart_t->flags.ID == 1)
+			{
+				uart_t->state = ERROR;
+			}
+
+			break;
+
+		case PARSE:
+
+			// get command
+			cmd = uart_t->RX_Buf[1]
+			
+			// get payload 
+			payload[0] = uart_t->RX_Buf[2];
+			payload[1] = uart_t->RX_Buf[3];
+			payload[2] = uart_t->RX_Buf[4];
+			payload[3] = uart_t->RX_Buf[5];
+			
+			parsemessage(cmd,&payload);
+
+			// Jump to next state
+			uart_t->state = IDLE;
+
+			break;
+
+		case ERROR:
+
+			//Disable RX
+			disable_rx_int(uart_t->channel);
+			
+			//reinitialize UART
+			uartInit();
+
+			// Jump to next state
+			uart_t->state = IDLE;
+
+			break;
+
+		default:
+			uart_t->state = IDLE;
+			break;
+	}
+}
+
+
+/////////////////////////////////////////////////////////////////////////
+// UART RX INTERRUPT HANDLER
+/////////////////////////////////////////////////////////////////////////
+void rx_interrupt_handler(UART_T uart_t)
+{
+	uint8_t bRX;
+	char_t bRX_char;
+	ERRCODE_T ret;
+
+	// Verify RX flag
+	if(uart_t->flags.receiving == 0)
+	{
+		// Set RX flag
+		uart_t->flags.receiving = 1;
+
+		// Clear buffer counter
+		uart_t->RX_BufCount = 0;
+
+		// Set last byte to maximum
+		uart_t->RX_FrameSize = 0xff;
+	}
+
+	// Read byte from serial
+	ret = readByte(uart_t->channel, &bRX);
+
+	// If error in receive jump to ERROR
+	if(ret == UART_NO_ERROR)
+	{
+		// Store byte on receiver buffer
+		uart_t->RX_Buf[uart_t->RX_BufCount] = bRX;
+
+		// Set Fram size different for each commmand
+		if((uart_t->RX_BufCount >= 1) && (uart_t->RX_FrameSize == 0xff))
+		{
+			switch(uart_t->RX_Buf[1])
+			{
+				case COMMAND_1:
+					uart_t->RX_FrameSize = 4;
+				break;
+
+				case COMMAND_2:
+					uart_t->RX_FrameSize = 4;
+				break;
+
+				case COMMAND_3:
+					uart_t->RX_FrameSize = 4;
+				break;
+
+				default:
+					uart_t->RX_FrameSize = 0xff;
+				break;
+			}
+		}
+
+		// Increment buffer counter
+		uart_t->RX_BufCount++;
+
+		// Finish the reception
+		if(uart_t->RX_BufCount == uart_t->RX_FrameSize)
+		{
+			// Finished flag
+			uart_t->flags.receiving_done = 1;
+
+			// Disable Rx interrupt
+			disable_rx_int(uart_t->channel);
+		}
+	}
+	else
+	{
+		uart_t->flags.ERROR = 1;
+	}
+}
