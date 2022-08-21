@@ -5,10 +5,10 @@
 typedef enum {IDLE, RECEIVING, CHECK, PARSE, REPLY, ERROR} UART_STATES_T;
 
 typedef struct {
-	unsigned short ID				:1;				
-	unsigned short ERROR			:1;				
-	unsigned short CRC				:1;				
-	unsigned short receiving		:1;			
+	unsigned short ID		:1;				
+	unsigned short ERROR		:1;				
+	unsigned short CRC		:1;				
+	unsigned short receiving	:1;			
 	unsigned short receiving_done	:1;	
 } UART_FLAG;
 
@@ -35,8 +35,8 @@ void uartInit(void)
 	uart_GENERIC.channel = CHANNEL_GENERIC;
 	uart_GENERIC.id 	 = GENERIC_ID;
 	uart_GENERIC.state 	 = IDLE;
-	UART_GENERIC_DRV_INIT_M(BIT_RATE, STOP_BIT, PARITY_MODE, PARITY_ENABLE,
-							&rx_interrupt_handler, INTERRUPT_PRIORITY);
+	UART_GENERIC_DRV_INIT_M(BIT_RATE, STOP_BIT, PARITY_MODE, PARITY_ENABLE, 
+				&rx_interrupt_handler, INTERRUPT_PRIORITY);
 }
 	
 
@@ -59,22 +59,21 @@ void commThread(void)
 /////////////////////////////////////////////////////////////////////////
 void uartStateMachine(UART_T *uart_t)
 {
-////////////////////////////////////////////////////////////////////////////////
-//							UART STATE MACHINE							  //
-//																			  //
-// 	+------+       +-----------+     receiving_done = 1   +-------+		      //
-//->| IDLE | ----->| RECEIVING | ------------------------>| CHECK | 		  //
-// 	+------+ 	   +-----------+ 	                      +-------+		   	  //
-// 		^	  													 |			  //
-// 		|					Flag.CRC = 0 and Flag.ID = 1		 |			  //
-// 		|<-------------------------------------------------------|		  	  //
-//		|													 	 |		  	  //
-// 		|                       								 |       	  //
-// 		|                       Flag.PROC = 0	   +--------+    | Flag.CRC=0 //
-// 		------------------------------------------ | PARSE  |<---- Flag.ID=0  //
-// 					            		           +--------+				  //
-//																			  //
-////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//				UART STATE MACHINE				//
+//		 								//
+//  +------+       +-----------+     receiving_done = 1   +-------+		//
+//->| IDLE | ----->| RECEIVING | ------------------------>| CHECK | 		//
+//  +------+ 	   +-----------+ 	                  +-------+		//
+// 	^							|		//
+// 	|		Flag.CRC = 0 and Flag.ID = 1		|		//
+// 	|<------------------------------------------------------|		//		
+// 	|                       				| 		//
+// 	|                       Flag.PROC = 0	   +--------+   | Flag.CRC=0    //
+// 	------------------------------------------ | PARSE  |<--- Flag.ID=0     //
+// 					           +--------+		 	//
+//										//
+//////////////////////////////////////////////////////////////////////////////////
 	float payload[4];
 	
 	switch(uart_t->state)
