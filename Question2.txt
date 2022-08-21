@@ -1,4 +1,4 @@
-// Button state machine Question 4
+// Button state machine Question 2
 
 #define BUTTON_PIN 4
 
